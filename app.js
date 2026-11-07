@@ -1,6 +1,6 @@
 // author: claude
 // 一息 · A 晨昏版。页面浮在一片随时间变化的天空和远山上（index.html 的 #scene）。
-import { PRACTICES, DURATIONS, SOUNDS, INTERVALS, MOODS, SAFETY } from './content.js';
+import { PRACTICES, COURSE, DURATIONS, SOUNDS, INTERVALS, MOODS, SAFETY } from './content.js';
 import { Sound } from './audio.js';
 import { renderSession, silentWav } from './render.js';
 
@@ -16,7 +16,7 @@ const store = {
   },
 };
 
-const DEFAULTS = { duration: 5, mood: true, cues: true, vibrate: true, volume: 0.8, bgVolume: 0.3, voice: true, sound: 'none', interval: 0, last: 'slow', sky: 'auto' };
+const DEFAULTS = { duration: 5, mood: true, cues: true, vibrate: true, volume: 0.8, bgVolume: 0.3, voice: true, sound: 'none', interval: 0, last: 'slow', sky: 'auto', sleepTail: 30 };
 let settings = { ...DEFAULTS, ...store.get('settings', {}) };
 let records = store.get('records', []);
 const saveSettings = () => store.set('settings', settings);
@@ -156,16 +156,44 @@ const GROUPS = {
   sleep: { name: '助眠', note: '躺着做，结束时不用睁眼，可以直接睡去。', ids: ['sleep', 'scan', 'slow'] },
 };
 
+// ---------------------------------------------------------------- 7 天入门课（T018）
+// 进度从练习记录里算：某一课练满八成时长就算学完，所以导出、导入记录时进度一起带上。
+// 不锁课、不清零：首页推“第一个还没学完的”，哪一课都能随时点开重听。
+const courseOn = () => COURSE.ready || new URLSearchParams(location.search).has('course');
+const isLesson = (id) => PRACTICES[id] && PRACTICES[id].cat === 'course';
+const lessonDone = (r) => isLesson(r.key) && (r.complete || r.actualSec >= 0.8 * r.plannedSec);
+const lessonMin = (id) => Math.max(PRACTICES[id].dur || 5, minMinutes(id));
+function courseState() {
+  const done = new Set(records.filter(lessonDone).map((r) => r.key));
+  const today = dayKey(Date.now());
+  return {
+    done,
+    next: COURSE.ids.find((id) => !done.has(id)) || null,
+    today: records.some((r) => lessonDone(r) && dayKey(r.ts) === today), // 今天已经学过一课
+  };
+}
+
 // 首页“今天就练这个”：替用户先选好，不用每天做决定
 function todayPick() {
   const h = new Date().getHours();
+  const night = h >= 21 || h < 4;
+  if (courseOn()) {
+    const c = courseState();
+    if (c.next && !c.today && !(night && records.length)) return { id: c.next, dur: lessonMin(c.next) };
+  }
   let id;
   if (!records.length) id = 'slow';
   else if (h >= 21 || h < 4) id = 'sleep';
   else if (h >= 5 && h < 10) id = 'slow';
   else id = PRACTICES[settings.last] ? settings.last : 'slow';
-  const dur = Math.max(id === 'sleep' ? Math.max(settings.duration, 10) : settings.duration, minMinutes(id));
-  return { id, dur };
+  return { id, dur: durFor(id) };
+}
+// 每项练习各记各的时长（T022）：在练习面板里改时长不会改掉设置页的默认时长
+function durFor(id) {
+  if (isLesson(id)) return lessonMin(id);
+  const own = (settings.durBy || {})[id];
+  const d = own || (id === 'sleep' ? Math.max(settings.duration, 10) : settings.duration);
+  return Math.max(d, minMinutes(id));
 }
 
 // ---------------------------------------------------------------- 页面
@@ -195,41 +223,75 @@ function renderHome() {
       <p class="eyebrow shadow">${d.getMonth() + 1} 月 ${d.getDate()} 日 · 星期${wk} · ${sky.name}</p>
       <h1 class="greet shadow">${greeting()}<br>${sky.line}</h1>
       <div class="spacer"></div>
-      <button class="today card" data-action="today" data-id="${id}" data-dur="${dur}" aria-label="开始${esc(p.name)} ${dur} 分钟">
-        <small>今天就练这个</small>
-        <span class="t">${esc(p.name)}<span class="dot">·</span>${dur} 分钟</span>
+      ${tailHtml()}
+      <div class="today card">
+        <button class="go" data-action="today" data-id="${id}" data-dur="${dur}" aria-label="开始${esc(p.name)} ${dur} 分钟"></button>
+        <small>${isLesson(id) ? `${esc(COURSE.name)} · 今天就练这个` : '今天就练这个'}</small>
+        <span class="t">${esc(p.name)}<span class="dot">·</span>${isLesson(id) ? `${dur} 分钟` : `<button class="dur" data-action="setup" data-id="${id}" aria-label="改时长或声音">${dur} 分钟<i aria-hidden="true"></i></button>`}</span>
         <span class="m">${esc(p.short)} · ${week}</span>
         <span class="play" aria-hidden="true"></span>
-      </button>
+      </div>
+      ${courseRow()}
       <div class="quick">
         ${Object.entries(GROUPS).map(([k, g]) => `<button class="glass" data-action="group" data-cat="${k}">${g.name}</button>`).join('')}
       </div>
       <div class="home-foot shadow">
         <button data-action="sos">现在很紧张？先做 1 分钟</button>
-        <button data-action="setup" data-id="${id}">调整 ›</button>
       </div>
     </div>`;
 }
 
+// 记录页（T024，初稿由 DeepSeek 写、claude 审改）：本周对比上周、四周格子标日期、空记录只给一个开始按钮
 function renderStats() {
   const s = stats();
   const ws = weekStart();
   const today = dayKey(Date.now());
+  const header = `<header class="shadow"><h1 class="page-title">记录</h1><p class="page-sub">只记这周练了几天。漏一天，什么都不会失去。</p></header>`;
+
+  // 冷启动：只有标题和引导卡
+  if (records.length === 0) {
+    view.innerHTML = `${header}
+      <section class="panel card empty">
+        <p class="muted">练完第一次，这里就会开始记。</p><button class="start" data-action="first">开始第一次</button>
+      </section>`;
+    return;
+  }
+
   const wk = ['一', '二', '三', '四', '五', '六', '日'].map((n, i) => {
     const d = new Date(ws); d.setDate(ws.getDate() + i);
     const k = dayKey(d.getTime());
     return `<span class="wd ${s.weekDays.has(k) ? 'on' : ''} ${k === today ? 'now' : ''}"><i></i>${n}</span>`;
   }).join('');
 
+  // 本周时长与上周练了几天
+  const wsEnd = new Date(ws); wsEnd.setDate(ws.getDate() + 7);
+  const weekSec = records.reduce((n, r) => n + (r.ts >= ws.getTime() && r.ts < wsEnd.getTime() ? r.actualSec : 0), 0);
+  const lwStart = new Date(ws); lwStart.setDate(ws.getDate() - 7);
+  const lwDays = new Set();
+  for (const r of records) if (r.ts >= lwStart.getTime() && r.ts < ws.getTime()) lwDays.add(dayKey(r.ts));
+
+  // 练后评价
+  const rated = records.filter((r) => r.moodAfter != null).length;
+  const good = records.filter((r) => r.moodAfter != null && r.moodAfter >= 4).length;
+
   const perDay = {};
-  for (const r of records) perDay[dayKey(r.ts)] = (perDay[dayKey(r.ts)] || 0) + r.actualSec / 60;
-  const start = new Date(ws); start.setDate(ws.getDate() - 21);
+  for (const r of records) {
+    const k = dayKey(r.ts);
+    perDay[k] = (perDay[k] || 0) + r.actualSec / 60;
+  }
+  // 四行，每行周一标签 + 七天格子
   let grid = '';
-  for (let i = 0; i < 28; i++) {
-    const d = new Date(start); d.setDate(start.getDate() + i);
-    const m = perDay[dayKey(d.getTime())] || 0;
-    const lv = m === 0 ? 0 : m < 5 ? 1 : m < 10 ? 2 : 3;
-    grid += `<span class="cell l${lv} ${d.getTime() > Date.now() ? 'future' : ''}" title="${d.getMonth() + 1}/${d.getDate()} · ${Math.round(m)} 分钟"></span>`;
+  for (let row = 0; row < 4; row++) {
+    const rowStart = new Date(ws); rowStart.setDate(ws.getDate() - 21 + row * 7);
+    grid += `<span class="wk">${rowStart.getMonth() + 1}/${rowStart.getDate()}</span>`;
+    for (let col = 0; col < 7; col++) {
+      const d = new Date(rowStart); d.setDate(rowStart.getDate() + col);
+      const k = dayKey(d.getTime());
+      if (k > today) { grid += '<span class="cell future"></span>'; continue; }
+      const m = perDay[k] || 0;
+      const lv = m === 0 ? 0 : m < 5 ? 1 : m < 10 ? 2 : 3;
+      grid += `<span class="cell l${lv}" title="${d.getMonth() + 1}/${d.getDate()} · ${Math.round(m)} 分钟"></span>`;
+    }
   }
 
   const list = records.slice(-30).reverse().map((r) => {
@@ -240,15 +302,16 @@ function renderStats() {
   }).join('');
 
   view.innerHTML = `
-    <header class="shadow"><h1 class="page-title">记录</h1><p class="page-sub">只记这周练了几天。漏一天，什么都不会失去。</p></header>
+    ${header}
     <section class="panel card">
       <div class="weekrow">${wk}</div>
-      <p class="big-num">本周<b>${s.weekDays.size}</b>天</p>
+      <p class="big-num">本周 <b>${s.weekDays.size}</b> 天 · 上周 ${lwDays.size} 天</p>
+      <p class="note">本周 ${Math.round(weekSec / 60)} 分钟</p>
     </section>
     <section class="tiles">
       <div class="tile card"><b>${Math.round(s.totalMin)}</b><span>累计分钟</span></div>
       <div class="tile card"><b>${s.count}</b><span>练习次数</span></div>
-      <div class="tile card"><b>${s.moodAvg == null ? '—' : s.moodAvg.toFixed(1)}</b><span>练后心情<br>（满分 5）</span></div>
+      <div class="tile card"><b>${rated === 0 ? '—' : good}</b><span>练完觉得不错<br>（共 ${rated} 次）</span></div>
     </section>
     <section class="panel card">
       <h2>最近四周</h2>
@@ -298,6 +361,14 @@ function renderSettings() {
       <input type="file" id="importfile" accept=".json,application/json" hidden>
     </section>
     <section class="panel card">
+      <h2>提醒</h2>
+      <p class="muted">一息不发通知。想每天提醒自己，可以在系统日历里加一个每天重复的日程，到点由日历提醒你；不想要了，在日历里删掉这个日程就行。练完后点“明天这个时间再来”也能加。</p>
+      <div class="btnrow">
+        <label class="time-pick"><span>每天</span><input type="time" id="remindat" value="${hhmm(remindTime())}"></label>
+        <button class="btn-line" data-action="remind-at">加到日历</button>
+      </div>
+    </section>
+    <section class="panel card">
       <h2>关于</h2>
       <p class="muted">一息：免费、无广告、无账号、可离线。在 iPhone 上用 Safari 打开，点“分享 → 添加到主屏幕”，就能像 App 一样使用。</p>
       <p class="muted">锁屏后声音会继续播放，可以在锁屏界面暂停。如果从主屏幕图标打开时锁屏就停了，改在 Safari 里打开会更稳定（这是部分 iOS 版本的已知问题）。</p>
@@ -307,10 +378,29 @@ function renderSettings() {
 
 // ---------------------------------------------------------------- 面板
 
+const SHEET_TOP = `<div class="grab"></div><button class="sheet-close" data-action="close-sheet" aria-label="关闭">${'×'}</button>`;
 function showSheet(html) {
-  overlay.innerHTML = `<div class="sheet-backdrop" data-action="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`;
+  overlay.innerHTML = `<div class="sheet-backdrop" data-action="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true">${SHEET_TOP}${html}</div>`;
   overlay.className = 'show';
   requestAnimationFrame(() => overlay.classList.add('in'));
+}
+
+// 首页入门课这一行：学完以后收起来（之后从“引导”里还能找到）
+function courseRow() {
+  if (!courseOn()) return '';
+  const c = courseState();
+  if (!c.next) return '';
+  const dots = COURSE.ids.map((id) => `<i class="${c.done.has(id) ? 'on' : ''}"></i>`).join('');
+  return `<button class="course-row glass" data-action="course"><span>${esc(COURSE.name)}</span><span class="dots" aria-hidden="true">${dots}</span><span>${c.done.size}/${COURSE.ids.length} ›</span></button>`;
+}
+
+function openCourse() {
+  const c = courseState();
+  showSheet(`
+    <h2>${esc(COURSE.name)}</h2>
+    <p class="desc">${esc(COURSE.note)} 已学完 ${c.done.size}/${COURSE.ids.length}。</p>
+    <div>${COURSE.ids.map((id) => { const p = PRACTICES[id]; const ok = c.done.has(id); return `<button class="pick" data-action="setup" data-id="${id}"><i class="dot ${ok ? 'done' : ''} ${id === c.next ? 'next' : ''}">${ok ? '✓' : p.day}</i><span><b>${esc(p.name)}</b><span>${ok ? '已学完 · ' : id === c.next ? '下一课 · ' : ''}${esc(p.short)}</span></span>${ICON.chevron}</button>`; }).join('')}</div>
+    <p class="hint">${esc(SAFETY)}</p>`);
 }
 
 function openGroup(cat) {
@@ -319,27 +409,33 @@ function openGroup(cat) {
   showSheet(`
     <h2>${g.name}</h2>
     <p class="desc">${esc(g.note)}</p>
-    <div>${g.ids.map((id) => `<button class="pick" data-action="setup" data-id="${id}" data-cat="${cat}"><i class="dot"></i><span><b>${esc(PRACTICES[id].name)}</b><span>${esc(PRACTICES[id].short)}</span></span>${ICON.chevron}</button>`).join('')}</div>`);
+    <div>${g.ids.map((id) => `<button class="pick" data-action="setup" data-id="${id}" data-cat="${cat}"><i class="dot"></i><span><b>${esc(PRACTICES[id].name)}</b><span>${esc(PRACTICES[id].short)}</span></span>${ICON.chevron}</button>`).join('')}${cat === 'guided' && courseOn() ? `<button class="pick" data-action="course"><i class="dot"></i><span><b>${esc(COURSE.name)}</b><span>每天一课，先听讲解再跟着练</span></span>${ICON.chevron}</button>` : ''}</div>`);
 }
 
-function openSetup(id, again = false) {
+// 助眠：练完后背景声继续多久（T021）
+const TAILS = [{ id: 0, name: '不继续' }, { id: 15, name: '15 分钟' }, { id: 30, name: '30 分钟' }];
+const forSleep = (id, cat) => cat === 'sleep' || !!PRACTICES[id].sleepy;
+
+function openSetup(id, again = false, cat = '') {
   const p = PRACTICES[id];
+  const sleep = forSleep(id, cat);
   const min = minMinutes(id);
-  const dur = Math.max(settings.duration, min);
+  const dur = durFor(id);
   const durOpts = DURATIONS.map((d) => ({ id: d, name: `${d} 分钟`, off: d < min }));
   const html = `
     <h2>${esc(p.name)}</h2>
     <p class="desc">${esc(p.desc)}</p>
-    <h3>时长</h3>
+    ${isLesson(id) ? `<p class="hint">约 ${lessonMin(id)} 分钟。先听一小段讲解，再跟着声音练。</p>` : `<h3>时长</h3>
     ${chips('s-duration', durOpts, dur)}
-    ${min > 1 ? `<p class="hint">人声读完一遍约需 ${min} 分钟，更短的时长先关掉了。</p>` : ''}
+    ${min > 1 ? `<p class="hint">人声读完一遍约需 ${min} 分钟，更短的时长先关掉了。</p>` : ''}`}
     ${p.steps ? `<h3>人声朗读</h3>${chips('s-voice', [{ id: 1, name: '开' }, { id: 0, name: '关（只看文字）' }], settings.voice ? 1 : 0)}` : ''}
     <h3>背景声</h3>
     ${chips('s-sound', SOUNDS, settings.sound)}
     <label class="row slim"><span>背景声音量</span><input type="range" min="0" max="1" step="0.05" value="${settings.bgVolume}" data-setting="bgVolume"></label>
     ${p.cat === 'sit' ? `<h3>间隔钵声</h3>${chips('s-interval', INTERVALS, settings.interval)}` : ''}
-    <button class="start" data-action="begin" data-id="${id}">开始</button>`;
-  if (again) { $('.sheet', overlay).innerHTML = `<div class="grab"></div>${html}`; return; }
+    ${sleep ? `<div class="tail-box ${settings.sound === 'none' ? 'off' : ''}"><h3>练完后声音继续</h3>${chips('s-tail', TAILS, settings.sleepTail)}<p class="hint">最后 3 分钟慢慢变小，然后自己停。<span class="need">先选一种背景声。</span></p></div>` : ''}
+    <button class="start" data-action="begin" data-id="${id}" data-cat="${sleep ? 'sleep' : ''}">开始</button>`;
+  if (again) { $('.sheet', overlay).innerHTML = `${SHEET_TOP}${html}`; return; }
   showSheet(html);
 }
 
@@ -410,6 +506,7 @@ function begin(id, durMin, opts = {}) {
 
 // 这次练习的声音时间表
 function soundEvents(p, total, bounds, clips, opts) {
+  const soft = p.sleepy || opts.sleep; // 助眠：钵声更轻
   const ev = [];
   if (p.pattern) {
     if (settings.cues) {
@@ -424,7 +521,7 @@ function soundEvents(p, total, bounds, clips, opts) {
       }
     }
   } else {
-    ev.push({ t: 0.05, type: 'bell', strength: p.sleepy ? 0.6 : 1, base: 330, decay: 1 });
+    ev.push({ t: 0.05, type: 'bell', strength: soft ? 0.6 : 1, base: 330, decay: 1 });
     if (bounds) {
       bounds.forEach((b, k) => {
         if (clips) ev.push({ t: b + (k === 0 ? LEAD : 0.8), type: 'voice', url: clips[k].file });
@@ -435,7 +532,7 @@ function soundEvents(p, total, bounds, clips, opts) {
       if (iv > 0) for (let t = iv; t < total - 5; t += iv) ev.push({ t, type: 'bell', strength: 0.5, base: 330, decay: 1 });
     }
   }
-  ev.push({ t: total, type: 'bell', strength: p.sleepy ? 0.5 : 1, base: 330, decay: 1 }); // 结束钵声
+  ev.push({ t: total, type: 'bell', strength: soft ? 0.5 : 1, base: 330, decay: 1 }); // 结束钵声
   return ev;
 }
 
@@ -451,6 +548,7 @@ function runSession(id, durMin, opts) {
   let clips = null;
   if (p.steps) ({ total, bounds, clips } = planSteps(id, total));
 
+  const sunY = isLesson(id) ? 4 : -8; // 入门课的讲解较长，太阳放低一点，别压在文字上
   const hint = p.pattern ? p.hint : p.steps ? (clips ? '闭上眼睛也可以，跟着声音做' : '跟着文字一段一段做') : '';
   overlay.innerHTML = `
     <div class="session ${p.cat}">
@@ -470,7 +568,7 @@ function runSession(id, durMin, opts) {
     </div>`;
   overlay.className = 'show in';
   document.body.classList.add('live');
-  placeSun('50%', p.pattern ? 13 : -8, 1);
+  placeSun('50%', p.pattern ? 13 : sunY, 1);
 
   const phaseEl = $('#phase'), countEl = $('#count'), cueEl = $('#cue'), remainEl = $('#remain'), prog = $('#prog'), hintEl = $('#hint');
   const A = active = { id, p, total, opts, ready: false, paused: false, lastPhase: -1, lastStep: -1, raf: 0, done: false };
@@ -481,7 +579,7 @@ function runSession(id, durMin, opts) {
 
   renderSession({
     total, events: soundEvents(p, total, bounds, clips, opts),
-    sound: opts.sound ?? settings.sound, bgLevel: settings.bgVolume, volume: settings.volume,
+    sound: opts.sound ?? settings.sound, bgLevel: settings.bgVolume, volume: settings.volume, tail: opts.tail || 0,
   }).then((blob) => {
     if (A.done) return;
     if (trackUrl) URL.revokeObjectURL(trackUrl);
@@ -520,7 +618,7 @@ function runSession(id, durMin, opts) {
       if (!A.ready) phaseEl.textContent = '准备一下';
       else if (!A.paused) { const left = Math.ceil(ph.d - tc); countEl.textContent = left > 0 ? left : ''; }
     } else {
-      placeSun('50%', -8 + 2 * Math.sin((2 * Math.PI * e) / 12), 1.05); // 太阳停在半空，很慢地浮动
+      placeSun('50%', sunY + 2 * Math.sin((2 * Math.PI * e) / 12), 1.05); // 太阳停在半空，很慢地浮动
       if (bounds) {
         let k = 0;
         while (k < bounds.length - 1 && e >= bounds[k + 1]) k++;
@@ -528,7 +626,7 @@ function runSession(id, durMin, opts) {
           const first = A.lastStep < 0;
           A.lastStep = k;
           cueEl.classList.remove('show');
-          setTimeout(() => { cueEl.textContent = p.steps[k][1]; cueEl.classList.add('show'); }, first ? 0 : 600);
+          setTimeout(() => { cueEl.textContent = p.steps[k][1]; cueEl.classList.toggle('long', p.steps[k][1].length > 64); cueEl.classList.add('show'); }, first ? 0 : 600);
           A.stepText = `第 ${k + 1} / ${p.steps.length} 段 · `;
         }
       }
@@ -592,26 +690,139 @@ function finish(complete) {
   active = null;
   placeSun('50%', 6, 1); // 练完后太阳停在山口，回到首页时再落回原位
 
-  if (sec < 30) { closeOverlay(); render(); return; }
+  if (sec < 30) { closeOverlay(); render(); toast('不到 30 秒，这次不记录'); return; }
 
   const rec = { id: Date.now().toString(36), ts: Date.now(), key: A.id, plannedSec: A.total, actualSec: sec, moodAfter: null, sound: A.opts.sound ?? settings.sound, complete };
   const save = () => { records.push(rec); saveRecords(); };
-  if (A.p.sleepy && complete) { save(); closeOverlay(); render(); return; }
+  if ((A.p.sleepy || A.opts.sleep) && complete) { save(); closeOverlay(); render(); if (A.opts.tail && !player.paused) showTailBar(A.opts.sound ?? settings.sound); return; }
 
   const mins = Math.max(1, Math.round(sec / 60));
+  const lesson = isLesson(A.id);
   const showDone = () => {
     const s = stats();
     overlay.innerHTML = `
       <div class="float shadow">
-        <h2>${complete ? '完成了' : '练了'} ${mins} 分钟</h2>
-        <p>本周第 ${s.weekDays.size} 天。漏一天，什么都不会失去。</p>
+        <h2>${lesson ? `第 ${A.p.day} 天${lessonDone(rec) ? '学完了' : `练了 ${mins} 分钟`}` : `${complete ? '完成了' : '练了'} ${mins} 分钟`}</h2>
+        <p>${lesson ? `${esc(COURSE.name)} ${courseState().done.size}/${COURSE.ids.length}。` : `本周第 ${s.weekDays.size} 天。`}漏一天，什么都不会失去。</p>
+        ${lesson && A.p.task ? `<div class="task card"><small>今日小练习</small><p>${esc(A.p.task)}</p></div>` : ''}
         <button class="ok" data-action="done">好</button>
+        <button class="again" data-action="remind" data-id="${A.id}" data-min="${Math.round(A.total / 60)}">明天 ${hhmm(remindTime())} 再来</button>
       </div>`;
     overlay.className = 'show in';
   };
   if (settings.mood && !A.opts.sos) askMood((m) => { rec.moodAfter = m; save(); showDone(); });
   else { save(); showDone(); }
 }
+
+// ---------------------------------------------------------------- 助眠：练完后背景声继续（T021）
+
+const sleepOpts = () => ({ sleep: true, tail: settings.sound !== 'none' ? settings.sleepTail * 60 : 0 });
+let tailTimer = 0;
+let tailName = ''; // 正在继续响的背景声名字；空表示没有
+// 回到首页后，今日卡片上方显示“雨声还会响 N 分钟 · 停止”，声音停了就收起
+function tailText() {
+  const left = player.duration - player.currentTime;
+  return `<span>${esc(tailName)}还会响 ${Math.max(1, Math.round(left / 60))} 分钟</span><button data-action="stoptail">停止</button>`;
+}
+const tailHtml = () => (tailName ? `<div id="tailbar" class="glass" role="status">${tailText()}</div>` : '');
+function showTailBar(sound) {
+  tailName = (SOUNDS.find((x) => x.id === sound) || {}).name || '背景声';
+  if (tab === 'home') render();
+  clearInterval(tailTimer);
+  tailTimer = setInterval(() => {
+    if (player.paused || player.ended || !(player.duration - player.currentTime > 0)) { hideTailBar(); return; }
+    const bar = $('#tailbar');
+    if (bar) bar.innerHTML = tailText();
+  }, 15000);
+}
+function hideTailBar() {
+  clearInterval(tailTimer);
+  if (!tailName) return;
+  tailName = '';
+  const bar = $('#tailbar');
+  if (bar) bar.remove();
+}
+player.addEventListener('pause', () => { if (!active) hideTailBar(); });
+player.addEventListener('ended', () => { if (!active) hideTailBar(); });
+
+// ---------------------------------------------------------------- 约好下一次：每天重复的日历提醒（T023）
+// 一息不能（也不想）发推送；生成一个 .ics 日程交给系统日历，提醒由日历发出，删掉日程就不再提醒。
+
+const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// 明天的“这个时间”，取整到 5 分钟
+function remindTime() {
+  const d = new Date(Date.now() + 864e5);
+  d.setMinutes(Math.round(d.getMinutes() / 5) * 5, 0, 0);
+  return d;
+}
+function addReminder(when, id, min) {
+  const p = id && PRACTICES[id];
+  const what = p && !isLesson(id) ? `${p.name} ${min} 分钟` : isLesson(id) ? `${COURSE.name}下一课` : `练 ${min} 分钟`;
+  const url = location.protocol.startsWith('http') ? location.origin + location.pathname : '';
+  const stamp = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+  const local = (d) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const text = (x) => x.replace(/[\\;,]/g, (c) => `\\${c}`);
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//yixi//reminder//ZH', 'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:yixi-${Date.now().toString(36)}@yixi`,
+    `DTSTAMP:${stamp(new Date())}`,
+    `DTSTART:${local(when)}`, // 不带时区：按手机当地时间
+    `DURATION:PT${Math.max(1, min || 5)}M`,
+    'RRULE:FREQ=DAILY',
+    `SUMMARY:${text(`一息 · ${what}`)}`,
+    `DESCRIPTION:${text(`${url ? `打开一息：${url}　` : ''}没空也没关系，漏一天什么都不会失去。`)}`,
+    ...(url ? [`URL:${url}`] : []),
+    'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT0M', `DESCRIPTION:${text(`一息 · ${what}`)}`, 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR', '',
+  ].join('\r\n');
+  const url2 = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+  if ('standalone' in navigator) location.href = url2; // iPhone：直接打开 .ics，系统弹出日程预览，可“添加到日历”
+  else { // 电脑和安卓：下载文件，双击用日历打开
+    const a = document.createElement('a');
+    a.href = url2;
+    a.download = 'yixi-reminder.ics';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+  setTimeout(() => URL.revokeObjectURL(url2), 60000);
+  toast(`已生成每天 ${hhmm(when)} 的日历提醒`);
+}
+
+// ---------------------------------------------------------------- 提示、面板下拉关闭（T022）
+
+let toastTimer = 0;
+function toast(text) {
+  let el = $('#toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// 面板：从把手或面板顶部往下拉超过 90 点就关掉；面板内容已经往下滚过时不拦截
+let drag = null;
+overlay.addEventListener('touchstart', (e) => {
+  const sheet = e.target.closest('.sheet');
+  if (!sheet || sheet.scrollTop > 0 || e.target.closest('input, [data-chip]')) return;
+  drag = { sheet, y0: e.touches[0].clientY, dy: 0 };
+}, { passive: true });
+overlay.addEventListener('touchmove', (e) => {
+  if (!drag) return;
+  drag.dy = Math.max(0, e.touches[0].clientY - drag.y0);
+  drag.sheet.style.transition = 'none';
+  drag.sheet.style.transform = `translateY(${drag.dy}px)`;
+}, { passive: true });
+overlay.addEventListener('touchend', () => {
+  if (!drag) return;
+  const { sheet, dy } = drag;
+  drag = null;
+  sheet.style.transition = '';
+  if (dy > 90) { sheet.style.transform = 'translateY(100%)'; setTimeout(closeOverlay, 220); }
+  else sheet.style.transform = '';
+});
 
 // ---------------------------------------------------------------- 事件
 
@@ -621,14 +832,20 @@ document.addEventListener('click', (e) => {
     const name = chip.dataset.chip;
     const val = chip.dataset.val;
     chip.parentElement.querySelectorAll('[data-chip]').forEach((b) => b.setAttribute('aria-checked', String(b === chip)));
-    if (name === 'duration' || name === 's-duration') settings.duration = Number(val);
+    if (name === 'duration') settings.duration = Number(val);
+    else if (name === 's-duration') settings.durBy = { ...(settings.durBy || {}), [$('[data-action=begin]', overlay).dataset.id]: Number(val) };
     else if (name === 'sky') { settings.sky = val; saveSettings(); applySky(); sunForPage(); return; }
-    else if (name === 's-sound') { settings.sound = val; Sound.unlock(); Sound.startBg(val, settings.bgVolume); } // 面板里先试听
+    else if (name === 's-sound') { // 面板里先试听
+      settings.sound = val; Sound.unlock(); Sound.startBg(val, settings.bgVolume);
+      const box = $('.tail-box', overlay); if (box) box.classList.toggle('off', val === 'none');
+    }
+    else if (name === 's-tail') settings.sleepTail = Number(val);
     else if (name === 's-interval') settings.interval = Number(val);
     else if (name === 's-voice') {
       settings.voice = val === '1';
       saveSettings();
-      openSetup($('[data-action=begin]', overlay).dataset.id, true); // 开关人声会改变最短时长，重画面板
+      const b = $('[data-action=begin]', overlay);
+      openSetup(b.dataset.id, true, b.dataset.cat); // 开关人声会改变最短时长，重画面板
       return;
     }
     saveSettings();
@@ -639,11 +856,28 @@ document.addEventListener('click', (e) => {
   if (!t) return;
   if (t.dataset.tab) { tab = t.dataset.tab; render(); return; }
   const a = t.dataset.action;
-  if (a === 'today') { settings.last = t.dataset.id; saveSettings(); begin(t.dataset.id, Number(t.dataset.dur)); }
+  if (a === 'today') {
+    const id = t.dataset.id;
+    if (!isLesson(id)) { settings.last = id; saveSettings(); }
+    begin(id, Number(t.dataset.dur), PRACTICES[id].sleepy ? sleepOpts() : {});
+  }
   else if (a === 'group') openGroup(t.dataset.cat);
-  else if (a === 'setup') { if (overlay.innerHTML) openSetup(t.dataset.id, true); else openSetup(t.dataset.id); }
+  else if (a === 'course') { if (overlay.innerHTML) closeOverlay(); openCourse(); }
+  else if (a === 'setup') openSetup(t.dataset.id, !!overlay.innerHTML, t.dataset.cat || '');
   else if (a === 'close-sheet') closeOverlay();
-  else if (a === 'begin') { settings.last = t.dataset.id; saveSettings(); begin(t.dataset.id, settings.duration); }
+  else if (a === 'begin') {
+    const id = t.dataset.id;
+    if (isLesson(id)) begin(id, lessonMin(id));
+    else { settings.last = id; saveSettings(); begin(id, durFor(id), t.dataset.cat === 'sleep' ? sleepOpts() : {}); }
+  }
+  else if (a === 'remind') { addReminder(remindTime(), t.dataset.id, Number(t.dataset.min)); }
+  else if (a === 'remind-at') {
+    const [h, m] = ($('#remindat').value || '21:30').split(':').map(Number);
+    const d = new Date(); d.setHours(h, m, 0, 0); if (d <= new Date()) d.setDate(d.getDate() + 1);
+    addReminder(d, null, settings.duration);
+  }
+  else if (a === 'stoptail') { player.pause(); hideTailBar(); }
+  else if (a === 'first') { const { id, dur } = todayPick(); begin(id, dur, PRACTICES[id].sleepy ? sleepOpts() : {}); }
   else if (a === 'sos') begin('sigh', 1, { sos: true, sound: 'none' });
   else if (a === 'pause') { if (active) active.togglePause(); }
   else if (a === 'end') { if (active) finish(false); else closeOverlay(); }
@@ -710,6 +944,8 @@ function exportData() {
 // 每 5 分钟检查一次天色（跟随时间时，傍晚会自然变成夜晚）
 setInterval(() => { if (!active && settings.sky === 'auto') { const before = document.documentElement.dataset.sky; applySky(); if (before !== document.documentElement.dataset.sky) render(); } }, 5 * 60 * 1000);
 
+// iPhone Safari（不是从主屏幕打开）：navigator.standalone 只在 iOS 上存在，为 false 时底部有浮动工具栏
+if (navigator.standalone === false) document.documentElement.classList.add('ios-safari');
 $('#tabs').classList.add('glass');
 $('#tabs').innerHTML = [['home', '今天', ICON.home], ['stats', '记录', ICON.stats], ['settings', '设置', ICON.gear]]
   .map(([id, n, ic]) => `<button data-tab="${id}">${ic}<span>${n}</span></button>`).join('');

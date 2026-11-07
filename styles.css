@@ -92,11 +92,37 @@ body.live #view, body.live #tabs { visibility: hidden; }
 .today .play { position: absolute; right: 18px; bottom: 18px; width: 48px; height: 48px; border-radius: 50%; background: var(--btn); color: var(--btn-ink); display: grid; place-items: center; }
 .today .play::after { content: ""; border-left: 13px solid currentColor; border-top: 8px solid transparent; border-bottom: 8px solid transparent; margin-left: 4px; }
 .today:active { transform: scale(.985); }
+/* 整张卡片是“开始”（.go 铺满卡片），时长标签单独可点，打开这次练习的设置 */
+.today .go { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.today .dur { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 7px; min-height: 44px; margin: -10px 0; padding: 0 12px;
+  border-radius: 999px; font: inherit; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.today .dur i { width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-3px) rotate(45deg); opacity: .6; }
 .quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
 .quick button { border-radius: 999px; padding: 11px 0; font-size: 14px; font-weight: 500; }
 .quick button:active { background: rgba(255, 255, 255, .34); }
+/* 助眠：练完后背景声继续 */
+.tail-box.off .chips { opacity: .35; pointer-events: none; }
+.tail-box .need { display: none; }
+.tail-box.off .need { display: inline; color: var(--accent); }
+#tailbar { align-self: center; display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 4px 4px 4px 18px; border-radius: 999px; font-size: 14px; white-space: nowrap; }
+#tailbar button { min-height: 40px; padding: 0 16px; border-radius: 999px; background: var(--btn); color: var(--btn-ink); font-weight: 600; }
+
+
+/* 入门课 */
+.course-row { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 10px; padding: 0 18px; min-height: 44px; border-radius: 999px; font-size: 14px; font-weight: 500; }
+.course-row .dots { display: flex; gap: 5px; flex: 1; justify-content: center; }
+.course-row .dots i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid currentColor; opacity: .7; }
+.course-row .dots i.on { background: currentColor; opacity: 1; }
+.pick .dot.done, .pick .dot.next { display: grid; place-items: center; font: 600 14px var(--sans); color: #fff; }
+.pick .dot:not(.done):not(.next):not(:empty) { display: grid; place-items: center; font: 500 14px var(--sans); color: var(--ink-2); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.pick .dot.done { background: var(--btn); color: var(--btn-ink); }
+.pick .dot.next { background: var(--accent); color: var(--btn-ink); }
+.home:has(.course-row) .spacer, .home:has(#tailbar) .spacer { min-height: 12vh; } /* 小屏上给入门课、继续响的背景声让出位置 */
+.float .task { margin-top: 26px; padding: 14px 18px; max-width: 22em; text-align: left; text-shadow: none; }
+.float .task small { font-size: 12px; color: var(--ink-2); letter-spacing: .08em; }
+.float .task p { margin: 4px 0 0; font-size: 15px; opacity: 1; line-height: 1.7; }
 .home-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 14px; }
-.home-foot button { padding: 6px 2px; opacity: .92; }
+.home-foot button { min-height: 44px; padding: 0 2px; opacity: .92; }
 
 /* 底部导航 */
 #tabs { position: fixed; z-index: 4; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 12px);
@@ -104,6 +130,11 @@ body.live #view, body.live #tabs { visibility: hidden; }
 #tabs button { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 11px; opacity: .62; }
 #tabs button svg { width: 20px; height: 20px; }
 #tabs button[aria-current="page"] { opacity: 1; }
+/* 底部导航对比度（T022）：清晨、傍晚垫一层深色远山色；白天改成浅底深字 */
+#tabs { background: color-mix(in srgb, var(--h3) 72%, transparent); }
+#tabs button { opacity: .82; }
+:root[data-sky="day"] #tabs { background: rgba(255, 255, 255, .74); color: var(--ink); }
+:root[data-sky="night"] #tabs { background: var(--chip); }
 
 /* 记录、设置 */
 .page-title { font: 500 30px/1.25 var(--serif); margin: 0; }
@@ -166,8 +197,13 @@ input[type="range"] { width: 52%; accent-color: var(--btn); }
   transform: translateY(100%); transition: transform .32s var(--ease); }
 #overlay.in .sheet { transform: none; }
 #overlay.in .sheet-backdrop { opacity: 1; }
+.sheet-close { position: absolute; top: 8px; right: 10px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 26px; line-height: 1; color: var(--ink-2); }
+.sheet-close::before { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+/* iPhone 的 Safari 里底部工具栏浮在网页上，给面板底部多留一段（.ios-safari 由 app.js 判断；添加到主屏幕后没有工具栏，不受影响） */
+.ios-safari .sheet { padding-bottom: calc(env(safe-area-inset-bottom) + 84px); }
 .grab { width: 40px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 20%, transparent); margin: 0 auto 16px; }
-.sheet h2 { font: 500 24px var(--serif); margin: 0; }
+.sheet h2 { font: 500 24px var(--serif); margin: 0; padding-right: 44px; }
 .sheet .desc { color: var(--ink-2); font-size: 14px; margin: 8px 0 4px; line-height: 1.7; }
 .sheet h3 { font-size: 12px; color: var(--ink-2); font-weight: 500; letter-spacing: .08em; margin: 20px 0 10px; }
 .sheet .hint { font-size: 12px; color: var(--ink-2); margin: 8px 0 0; }
@@ -208,6 +244,7 @@ input[type="range"] { width: 52%; accent-color: var(--btn); }
 .cue { position: absolute; left: 22px; right: 22px; top: calc(env(safe-area-inset-top) + 13vh); margin: 0 auto; max-width: 26em; text-align: center;
   font: 500 20px/1.8 var(--serif); opacity: 0; transition: opacity .7s; }
 .cue.show { opacity: 1; }
+.cue.long { font-size: 17px; line-height: 1.75; } /* 入门课约 100 字的讲解 */
 .session.breath .cue { display: none; }
 .session:not(.breath) .word { display: none; }
 .session:not(.breath) .word b { font-size: 15px; letter-spacing: .1em; font-family: var(--sans); font-weight: 400; opacity: .8; }
@@ -225,3 +262,20 @@ input[type="range"] { width: 52%; accent-color: var(--btn); }
   .quick button { font-size: 13px; }
   .tiles { grid-template-columns: 1fr 1fr; }
 }
+
+/* 轻提示 */
+#toast { position: fixed; z-index: 20; left: 50%; top: 42%; transform: translate(-50%, 8px); padding: 10px 18px; border-radius: 999px;
+  background: rgba(20, 22, 44, .86); color: #fff; font-size: 14px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* 约好下一次（T023） */
+.float .again { margin-top: 10px; min-height: 44px; padding: 0 18px; font-size: 14px; opacity: .9; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(255, 255, 255, .4); }
+.time-pick { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); }
+.time-pick input { font: inherit; color: var(--ink); background: transparent; border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); border-radius: 999px; padding: 7px 12px; min-height: 40px; }
+
+/* 记录页（T024）：四周格子每行前面标那周周一的日期；没有记录时只有一句话和一个按钮 */
+.grid4 { grid-template-columns: 2.6em repeat(7, 1fr); align-items: center; }
+.grid4 .wk { font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.cell.future { background: none; border: 1px dashed color-mix(in srgb, var(--ink) 14%, transparent); opacity: 1; }
+.panel.empty { text-align: center; padding: 26px 20px; }
+.panel.empty .start { margin-top: 14px; min-height: 48px; padding: 0 30px; border-radius: 999px; background: var(--btn); color: var(--btn-ink); font-weight: 600; }
