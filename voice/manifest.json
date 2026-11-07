@@ -1,0 +1,181 @@
+{
+ "engine": "doubao",
+ "voice": "zh_female_jitangnv_uranus_bigtts",
+ "speed": 0.8,
+ "generated": "2026-11-07T21:34:41",
+ "clips": {
+  "aware": [
+   {
+    "file": "voice/aware-0.mp3",
+    "dur": 10.06,
+    "hash": "1696d88b8f"
+   },
+   {
+    "file": "voice/aware-1.mp3",
+    "dur": 11.81,
+    "hash": "227101580a"
+   },
+   {
+    "file": "voice/aware-2.mp3",
+    "dur": 11.54,
+    "hash": "4fe6f18b3b"
+   },
+   {
+    "file": "voice/aware-3.mp3",
+    "dur": 14.33,
+    "hash": "f44b3a38c7"
+   },
+   {
+    "file": "voice/aware-4.mp3",
+    "dur": 10.51,
+    "hash": "63c3a32690"
+   },
+   {
+    "file": "voice/aware-5.mp3",
+    "dur": 11.02,
+    "hash": "c52fe882e3"
+   },
+   {
+    "file": "voice/aware-6.mp3",
+    "dur": 8.78,
+    "hash": "87e4954bfd"
+   },
+   {
+    "file": "voice/aware-7.mp3",
+    "dur": 6.84,
+    "hash": "f9731773c2"
+   }
+  ],
+  "scan": [
+   {
+    "file": "voice/scan-0.mp3",
+    "dur": 12.79,
+    "hash": "c57f28cb23"
+   },
+   {
+    "file": "voice/scan-1.mp3",
+    "dur": 15.31,
+    "hash": "27b724afd4"
+   },
+   {
+    "file": "voice/scan-2.mp3",
+    "dur": 9.58,
+    "hash": "adcfae1e87"
+   },
+   {
+    "file": "voice/scan-3.mp3",
+    "dur": 7.82,
+    "hash": "c62d06d7e5"
+   },
+   {
+    "file": "voice/scan-4.mp3",
+    "dur": 6.53,
+    "hash": "28e631629b"
+   },
+   {
+    "file": "voice/scan-5.mp3",
+    "dur": 9.79,
+    "hash": "76bb6bee69"
+   },
+   {
+    "file": "voice/scan-6.mp3",
+    "dur": 7.54,
+    "hash": "ad91cc6601"
+   },
+   {
+    "file": "voice/scan-7.mp3",
+    "dur": 10.32,
+    "hash": "1c7c3e4938"
+   },
+   {
+    "file": "voice/scan-8.mp3",
+    "dur": 10.34,
+    "hash": "37d3c252ce"
+   },
+   {
+    "file": "voice/scan-9.mp3",
+    "dur": 7.32,
+    "hash": "c57b1b4bf3"
+   }
+  ],
+  "kind": [
+   {
+    "file": "voice/kind-0.mp3",
+    "dur": 10.54,
+    "hash": "0a7581d29e"
+   },
+   {
+    "file": "voice/kind-1.mp3",
+    "dur": 8.52,
+    "hash": "a0c3476f05"
+   },
+   {
+    "file": "voice/kind-2.mp3",
+    "dur": 9.55,
+    "hash": "ee840248a6"
+   },
+   {
+    "file": "voice/kind-3.mp3",
+    "dur": 9.84,
+    "hash": "af376e231b"
+   },
+   {
+    "file": "voice/kind-4.mp3",
+    "dur": 11.04,
+    "hash": "211b865ce6"
+   },
+   {
+    "file": "voice/kind-5.mp3",
+    "dur": 11.35,
+    "hash": "068074030e"
+   },
+   {
+    "file": "voice/kind-6.mp3",
+    "dur": 10.32,
+    "hash": "cf5bec3219"
+   }
+  ],
+  "sleep": [
+   {
+    "file": "voice/sleep-0.mp3",
+    "dur": 9.55,
+    "hash": "587693020d"
+   },
+   {
+    "file": "voice/sleep-1.mp3",
+    "dur": 11.57,
+    "hash": "fbc98f1ac2"
+   },
+   {
+    "file": "voice/sleep-2.mp3",
+    "dur": 11.57,
+    "hash": "242c80adc4"
+   },
+   {
+    "file": "voice/sleep-3.mp3",
+    "dur": 5.54,
+    "hash": "95c9f12c40"
+   },
+   {
+    "file": "voice/sleep-4.mp3",
+    "dur": 9.55,
+    "hash": "3a7b996758"
+   },
+   {
+    "file": "voice/sleep-5.mp3",
+    "dur": 8.33,
+    "hash": "dbd8c4f864"
+   },
+   {
+    "file": "voice/sleep-6.mp3",
+    "dur": 7.99,
+    "hash": "d70a695684"
+   },
+   {
+    "file": "voice/sleep-7.mp3",
+    "dur": 6.84,
+    "hash": "6069c03c0c"
+   }
+  ]
+ }
+}

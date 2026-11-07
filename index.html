@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hans" data-sky="dusk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>一息</title>
+  <meta name="description" content="免费、无广告、无账号、可离线的呼吸与冥想练习">
+  <meta name="theme-color" content="#5d6f9a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="一息">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="scene" aria-hidden="true">
+    <div class="sky"></div>
+    <div class="stars"></div>
+    <div class="sun" id="sun"><i></i></div>
+    <svg class="hills" viewBox="0 0 400 800" preserveAspectRatio="none">
+      <path class="h1" d="M0 452 C60 410 118 436 172 404 C232 370 300 420 400 392 V800 H0Z"/>
+      <path class="h2" d="M0 512 C55 480 115 502 170 470 C230 438 300 492 400 462 V800 H0Z"/>
+      <path class="h3" d="M0 586 C80 552 150 574 220 545 C290 518 340 560 400 542 V800 H0Z"/>
+    </svg>
+  </div>
+  <main id="view"></main>
+  <nav id="tabs" aria-label="主导航"></nav>
+  <div id="overlay"></div>
+  <noscript>一息需要开启 JavaScript。</noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
