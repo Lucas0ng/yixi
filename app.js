@@ -399,7 +399,7 @@ function openCourse() {
   showSheet(`
     <h2>${esc(COURSE.name)}</h2>
     <p class="desc">${esc(COURSE.note)} 已学完 ${c.done.size}/${COURSE.ids.length}。</p>
-    <div>${COURSE.ids.map((id) => { const p = PRACTICES[id]; const ok = c.done.has(id); return `<button class="pick" data-action="setup" data-id="${id}"><i class="dot ${ok ? 'done' : ''} ${id === c.next ? 'next' : ''}">${ok ? '✓' : p.day}</i><span><b>${esc(p.name)}</b><span>${ok ? '已学完 · ' : id === c.next ? '下一课 · ' : ''}${esc(p.short)}</span></span>${ICON.chevron}</button>`; }).join('')}</div>
+    <div>${COURSE.ids.map((id) => { const p = PRACTICES[id]; const ok = c.done.has(id); return `<button class="pick" data-action="setup" data-id="${id}"><i class="dot ${ok ? 'done' : ''} ${id === c.next ? 'next' : ''}">${ok ? '✓' : p.day}</i><span><b>${esc(p.name)}</b><span>${ok ? '已学完 · ' : id === c.next ? '下一课 · ' : ''}${lessonMin(id)} 分钟 · ${esc(p.short)}</span></span>${ICON.chevron}</button>`; }).join('')}</div>
     <p class="hint">${esc(SAFETY)}</p>`);
 }
 

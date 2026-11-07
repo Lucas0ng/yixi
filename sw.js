@@ -1,6 +1,6 @@
 // author: claude
 // 离线缓存：先用缓存，同时在后台更新。改版时把 VERSION 加一。
-const VERSION = 'yixi-v13';
+const VERSION = 'yixi-v14';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'audio.js', 'content.js', 'synth.js', 'render.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
